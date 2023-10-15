@@ -1,9 +1,13 @@
 # Data Processing Script
-
+library(tuber)
+library(here)
+# Use environment variables
+yt_oauth(app_id = Sys.getenv("YT_APP_ID"),
+         app_secret = Sys.getenv("YT_APP_SECRET"))
 # Libraries ---------------------------------------------------------------
 
-library(tuber)
-library(readr)
+#
+library(readr) 
 library(dplyr)
 library(stringr)
 library(DT)
@@ -11,7 +15,10 @@ library(DT)
 # Data --------------------------------------------------------------------
 
 dat <-
-  read_csv("r-ladies_channels.csv")
+  read_csv(
+    here("Data Assets",
+      "r-ladies_channels.csv")
+  )
 
 # Processing --------------------------------------------------------------
 
