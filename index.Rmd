@@ -17,7 +17,11 @@ output:
 ```{r setup, include=FALSE}
 library(flexdashboard)
 library(bslib)
-source("data-processing.R", local = knitr::knit_global())
+library(here)
+source(
+  here("R scripts", "r-ladies-data-processing.R"),
+  local = knitr::knit_global()
+  )
 ```
 
 Channels {.sidebar}
@@ -47,16 +51,24 @@ Column {data-width=900}
 </style>
 
 ```{r}
-dat_dashboard %>%
-  dplyr::select(-chapter, -channel_image_url) %>%
-  DT::datatable(
-    colnames = c('Date', 'Channel', 'Video'),
-    filter = 'top',
-    escape = FALSE,
-    height = '1000',
-    elementId = 'dashboard',
-    options = list(columnDefs = list(
-      list(className = 'dt-middle', targets = "_all")
-    ))
-  )
+library(googlesheets4)
+gs4_auth(email = "danielamieva@dar4datascience.com")
+# read in file
+tbl_tidy_x_videos_processed <- read_sheet(ss = gs4_find("shiny-youtube-adhoc-search"),
+              sheet = "TidyX Videos")
+
+tbl_tidy_x_videos_processed |> 
+DT::datatable(
+  colnames = c('Date', 'Channel', 'Video', 'Episode Topics',
+               'Description'),
+  filter = 'top',
+  escape = FALSE,
+  height = '1000',
+  #quitar search para episode topics
+  elementId = 'dashboard',
+  options = list(columnDefs = list(
+    list(className = 'dt-middle', targets = "_all")
+  ))
+)
+
 ```

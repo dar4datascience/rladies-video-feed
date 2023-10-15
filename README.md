@@ -23,3 +23,9 @@ graph TB
         openai_api --> R_report
     end
 ```
+
+## Next steps
+
+ - quarto or keep flexdashboard look?
+ - make main page for gathered channels
+ - make tags search shiny interaction. maybe... selection multiple

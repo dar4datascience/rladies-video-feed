@@ -1,387 +1,90 @@
-library(dplyr)
-library(reticulate)
-library(here)
-library(tuber)
-library(purrr)
-library(tidytext)
-library(topicmodels)
-library(ggplot2)
-library(tidyr)
-library(openai)
-library(stringr)
-library(progressr)
+# Install pacman if you haven't already
+# install.packages("pacman")
+
+# Load packages using pacman::p_load
+pacman::p_load(
+  dplyr,
+  reticulate,
+  here,
+  tuber,
+  purrr,
+  tidytext,
+  topicmodels,
+  ggplot2,
+  tidyr,
+  openai,
+  stringr,
+  progressr
+)
+
 
 source(here("R scripts", "adhoc_youtube_functions.R"))
 # Use environment variables
 yt_oauth(app_id = Sys.getenv("YT_APP_ID"),
          app_secret = Sys.getenv("YT_APP_SECRET"))
+
+# How to find channel id at: https://www.youtube.com/watch?v=0oDy2sWPF38
+
 # TidyX -------------------------------------------------------------------
 
 # Call the recursive function to fetch all channel videos
 channel_id <- "UCP8l94xtoemCH_GxByvTuFQ"
 tidy_x_videos_list <- fetch_all_channel_videos(channel_id)
-# test_df <- fetch_channel_videos_page(channel_id, page_token = NULL)
-# test2_df <- fetch_channel_videos_page(channel_id, page_token = test_df[["nextPageToken"]])
+
 
 # Convert the result to a data frame
-# List all tidyX videos
-tidy_x_videos_df <- tidy_x_videos_list |> 
-  map(unlist) |>
-  map(~as.data.frame(t(.x), stringsAsFactors = FALSE)) |>
-  list_rbind() |> 
-  dplyr::mutate(
-    video_url = paste0(
-      "<a href='https://www.youtube.com/watch?v=",
-      snippet.resourceId.videoId,
-      "' target='_blank'>",
-      snippet.title,
-      "</a>"
-    ),
-    channel_url = paste0(
-      "<img src='",
-      "https://yt3.googleusercontent.com/ytc/APkrFKadUXFAW9OBku2xSEtxGPQugWZyc0jxVIaT4bYu=s176-c-k-c0x00ffffff-no-rj", # LOGO OF TIDY
-      "' alt='Logo for TidyX' width='40'></img>",
-      "<a href='https://www.youtube.com/channel/",
-      snippet.channelId,
-      "' target='_blank'>",
-      "TidyX",
-      "</a>"
-    ),
-    date = as.Date(str_sub(snippet.publishedAt, 1, 10))
-  ) |> 
-  dplyr::arrange(desc(snippet.publishedAt))
+tidy_x_videos_df <- process_youtube_video_list(tidy_x_videos_list,
+                    channel_name = "TidyX",                          logo_of_channel = "https://yt3.googleusercontent.com/ytc/APkrFKadUXFAW9OBku2xSEtxGPQugWZyc0jxVIaT4bYu=s176-c-k-c0x00ffffff-no-rj")
 
-# Generic Stop Words
-data(stop_words)
-# Relevant Stop Words
-tidy_x_stop_words <- tibble(
-  word = c(
-    "tidyx",
-    "https",
-    "github.com",
-    "tidy_explained",
-    "thebioengineer",
-    "episode",
-    "code",
-    "comments",
-    "data",
-   "master",
-    "twitter",
-    "questions",
-    "patreon",
-    "links",
-    "subscribe",
-    "www.patreon.com",
-    "suggestions",
-    "email",
-    "ellis_hughes",
-    "gmail.com",
-    "osppatrick",
-    "tidy.explained",
-    "tree",
-   "object",
-    "tidytuesday_explained",
-    "github",
-    "issue",
-    "page",
-    "issues",
-    "patron",
-    "sign",
-    # "package",
-    # "shiny",
-    "week",
-    "viewers",
-    "ellis",
-    "patrick",
-    "leave",
-    "hear",
-    "love",
-    "tidytuesday",
-    "bit.ly",
-    # "series",
-    # "rmarkdown",
-    # "model",
-    "talk",
-    #"post",
-    # "set",
-    # "create",
-    # "discuss",
-    # "status",
-    "twitter.com",
-    "functions",
-    "time",
-    # "plots",
-    "weeks",
-    "explain",
-    # "source",
-    # "explore",
-    # "plotly",
-    # "app",
-    # "function",
-    # "generate",
-    # "tidymodels",
-    # "apply",
-    # "classification",
-    # "objects",
-    # "bayes",
-    # "blob",
-    # "pitch",
-    # "plot",
-    # "based",
-    # "creating",
-    # "dataset",
-    # "object",
-    # "player",
-    # "cleaning",
-    # "database",
-    # "models",
-    # "start",
-    # "users",
-    # "interactive",
-    # "mlb",
-    # "results",
-    # "techniques",
-    # "excel",
-     "media",
-    "social",
-    "submission",
-   as.character(seq(1, 200)) # remove numeric values 
-    # "tables",
-    # "visualization",
-    # "base",
-    # "finally",
-    # "formatting",
-    # "multiple",
-    # "reports",
-    # "statistics",
-    # "visualize",
-    # "analysis",
-    # "styling",
-    # "performance",
-    # "user"
-  )
-  
-)
-  
-  
-tidy_x_descriptions <- tidy_x_videos_df |> 
-  select(snippet.title,
-         snippet.description) |> 
-  unnest_tokens(word, snippet.description) |> 
-  anti_join(stop_words) |> 
-  anti_join(tidy_x_stop_words)
+# Topic Modelling
+full_tidy_x_per_video_tags <- topic_model_tidy_x_videos(tidy_x_videos_df)
 
 
-word_counts <- tidy_x_descriptions |> 
-  group_by(snippet.title) |> 
-  count(word, sort = TRUE) |> 
-  rename(
-    "document" = snippet.title
-  ) |> 
-  ungroup()
+tbl_tidy_x_videos_processed <- generate_chatgpt_descriptions_4_tidy_x(full_tidy_x_per_video_tags)
 
 
-obtain_topics_per_tidy_x_episode <- function(word_counts,
-                                             episode_title) {
-  filtered_word_counts <- word_counts |>
-    filter(document == episode_title)
-  
-  chapters_dtm <- filtered_word_counts |>
-    cast_dtm(document, word, n)
-  
-  # get 4 topics per video
-  chapters_lda <-
-    LDA(chapters_dtm, k = 2, control = list(seed = 1234))
-  
-  
-  chapter_topics <- tidy(chapters_lda, matrix = "beta")
-  
-  
-  top_terms <- chapter_topics |>
-    group_by(topic) |>
-    slice_max(beta, n = 5) |>
-    ungroup() |>
-    arrange(topic, -beta)
-  #
-  # top_terms |>
-  #   mutate(term = reorder_within(term, beta, topic)) |>
-  #   ggplot(aes(beta, term, fill = factor(topic))) +
-  #   geom_col(show.legend = FALSE) +
-  #   facet_wrap(~ topic, scales = "free") +
-  #   scale_y_reordered()
-  
-  episode_topics <- top_terms |>
-    filter(beta > 0.0500) |>
-    slice_max(beta, n = 6) |>
-    distinct(term)
-  
-  episode_topics_df <- tibble(episode_title = episode_title,
-                             episode_topics = episode_topics)
-  
-  return(episode_topics_df)
-}
-
-episode_titles <- word_counts |> 
-  distinct(document) |> 
-  pull()
-
-per_episode_topics <- episode_titles |> 
-  map(
-    \(episode_title)
-    obtain_topics_per_tidy_x_episode(word_counts, episode_title)
-    ) |> 
-  list_rbind()
-
-format_to_html_list <- function(input_vector) {
-  html_lists <- vector("list", length(input_vector))
-  
-  for (i in seq_along(input_vector)) {
-    elements <- strsplit(input_vector[i], "\\|")[[1]]
-    html_list <- "<ul>\n"
-    
-    for (element in elements) {
-      html_list <- paste0(html_list, "    <li>", element, "</li>\n")
-    }
-    
-    html_list <- paste0(html_list, "</ul>")
-    html_lists[[i]] <- html_list
-  }
-  
-  return(html_lists)
-}
-
-# we can make this better by launching multiple workers
-# crew controller
-library(furrr)
-# Set a "plan" for how the code should run.
-plan(multisession,
-     workers = 6) 
-
-
-create_gpt_descriptions <- function(descriptions) {
-  # set progress bar
-  p <- progressr::progressor(steps = length(descriptions))
-
-  # Wrap the loop with with_progress to display the progress bar
-  # run in parallel
-  future_results <- future_map(1:length(descriptions), ~{
-    max_retries <- 3  # specify the maximum number of retry attempts
-    retry_count <- 0  # initialize a counter for retry attempts
-    
-    while (retry_count < max_retries) {
-      tryCatch(
-        {
-          p()
-          prompt <- glue::glue("Summarize this description to 2 or 3 small sentences: '{descriptions[.x]}' ")
-          completion <- create_chat_completion(
-            model = "gpt-3.5-turbo",
-            messages = list(
-              list(
-                "role" = "system",
-                "content" = "You are a helpful assistant who generates 2 sentence summaries from text given by the user, in your summaries you will not write to follow anyone's social media or supporting their Patreon nor patron."
-              ),
-              list(
-                "role" = "user",
-                "content" = prompt
-              )
-            )
-          )
-          
-          chat_message <- completion$choices$message.content
-          
-          return(chat_message)
-        },
-        error = function(e) {
-          # Handle error: print message and increment retry counter
-          print(paste("Error:", e$message, "Attempt:", retry_count + 1))
-          retry_count <- retry_count + 1
-          
-          # If max retries reached, return NA or a message
-          if (retry_count == max_retries) {
-            return(NA_character_)
-          }
-          
-          # Wait for 1 minute before retrying
-          Sys.sleep(60)
-        }
-      )
-      
-      # If the tryCatch block was successful, break out of the while loop
-      if (!is.na(chat_message)) {
-        break
-      }
-    }
-  })
-  
-  
-  return(future_results)
-}
-
-handlers(handler_txtprogressbar(char = cli::col_red(cli::symbol$heart)))
-handlers(global = TRUE)
-
-full_tidy_x_per_video_tags <- tidy_x_videos_df |> 
-  select(snippet.title,
-         snippet.description,
-         date,
-         video_url,
-         channel_url,
-         snippet.thumbnails.maxres.url) |> 
-  full_join(per_episode_topics,
-            join_by(snippet.title == episode_title)) |>
-  group_by(snippet.title) |> 
-  mutate(
-    episode_topics = episode_topics |> 
-      map_chr(
-        \(tibble_of_topics)
-        glue::glue_collapse(tibble_of_topics, 
-                            sep = '|')
-      )
-  ) |> 
-  distinct() |>  
-  ungroup() |> 
-  mutate(
-    episode_topics = format_to_html_list(episode_topics)
-  ) 
-
-# THIS MIGHT CRASH ALOT so its better to safely try
-# get results save. and try later for rest
-chatgpt_descriptions <- full_tidy_x_per_video_tags |>
-  pull(snippet.description) |>
-  create_gpt_descriptions()
-
-full_tidy_x_per_video_tags |> 
-  mutate(
-    gpt_descriptions = chatgpt_descriptions
-  ) |>
-  ungroup() |> 
-  select(
-    date, channel_url, video_url,
-    episode_topics,
-    gpt_descriptions
-  ) |> 
-DT::datatable(
-  colnames = c('Date', 'Channel', 'Video', 'Episode Topics',
-               'Description'),
-  filter = 'top',
-  escape = FALSE,
-  height = '1000',
-  elementId = 'dashboard',
-  options = list(columnDefs = list(
-    list(className = 'dt-middle', targets = "_all")
-  ))
-)
+# save to google sheets for practicallity and publicity
+library(googlesheets4)
+gs4_auth(email = "danielamieva@dar4datascience.com")
+# make public for others to see
+# Create once
+# gs4_create("shiny-youtube-adhoc-search", 
+#            sheets = c("TidyX Videos"))
+# can leave title for reading purposes
+# tbl_tidy_x_videos_processed |> 
+#   write_sheet(ss = gs4_find("shiny-youtube-adhoc-search"),
+#               sheet = "TidyX Videos")
 
 # Julia Silge -------------------------------------------------------------
+julia_silge_channel_id <- "UCTTBgWyJl2HrrhQOOc710kA"
+julia_silge_channel_image <- "https://yt3.googleusercontent.com/ytc/APkrFKa98GyCrxTk9lHWRV-hBAyaUVGjRTbyfSs8jKsLR4I=s900-c-k-c0x00ffffff-no-rj"
+
+julia_silge_video_list <- fetch_all_channel_videos(julia_silge_channel_id)
+# convert result to df
+julia_silge_video_df <- process_youtube_video_list(julia_silge_video_list,
+                                               channel_name = "Julia Silge",                          logo_of_channel = julia_silge_channel_image)
+#her descriptions are great no need for gpt
+
 
 
 
 
 # David Robinson ----------------------------------------------------------
+david_robinson_channel_id <- "UCeiiqmVK07qhY-wvg3IZiZQ"
+david_robinson_channel_image <- "https://yt3.googleusercontent.com/ytc/APkrFKZgKECiNJ3snfsqQ0MtErNKS3rs9APRHmz9Hwj1=s900-c-k-c0x00ffffff-no-rj
+"
+
+david_robinson_video_list <- fetch_all_channel_videos(david_robinson_channel_id)
+
+# convert result to df
+david_robinson_video_df <- process_youtube_video_list(david_robinson_video_list,
+                                               channel_name = "David Robinson",                          logo_of_channel = david_robinson_channel_image)
+#also descriptions are great no need for gpt
+
+# Posit Videos ------------------------------------------------------------
+posit_channel_id <- "UC3xfbCMLCw1Hh4dWop3XtHg"
+posit_channel_image <- "https://yt3.googleusercontent.com/tdMVAbii6ge_T_QDGQ5uZfm9cHPWo89-vUzMoO-5_NizdY07Zv0K47JyH-CXNJLW7IwMf3iELQ=s900-c-k-c0x00ffffff-no-rj"
 
 
-
-
-# Dude creator de shiny ---------------------------------------------------
 
 
